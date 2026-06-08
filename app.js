@@ -19,7 +19,8 @@
     startButton: document.querySelector("#startButton"),
     stopButton: document.querySelector("#stopButton"),
     syncButton: document.querySelector("#syncButton"),
-    exportButton: document.querySelector("#exportButton"),
+    exportGeojsonButton: document.querySelector("#exportGeojsonButton"),
+    exportJsonButton: document.querySelector("#exportJsonButton"),
     uploadUrl: document.querySelector("#uploadUrl"),
     pointCount: document.querySelector("#pointCount"),
     accuracyValue: document.querySelector("#accuracyValue"),
@@ -72,7 +73,8 @@
     els.startButton.addEventListener("click", startRecording);
     els.stopButton.addEventListener("click", stopRecording);
     els.syncButton.addEventListener("click", () => syncPendingTracks({ silent: false }));
-    els.exportButton.addEventListener("click", exportTracks);
+    els.exportGeojsonButton.addEventListener("click", exportGeojsonTracks);
+    els.exportJsonButton.addEventListener("click", exportBackupJson);
     els.uploadUrl.addEventListener("change", saveUploadUrl);
     els.uploadUrl.addEventListener("blur", saveUploadUrl);
     window.addEventListener("online", () => {
@@ -410,23 +412,81 @@
     }
   }
 
-  async function exportTracks() {
+  async function exportGeojsonTracks() {
     const tracks = await getAllTracks();
-    if (tracks.length === 0) {
-      els.syncStatus.textContent = "No tracks to export";
+    const geojson = tracksToGeojson(tracks);
+
+    if (geojson.features.length === 0) {
+      els.syncStatus.textContent = "No GPS points to export";
       return;
     }
 
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), tracks }, null, 2)], {
-      type: "application/json",
-    });
+    downloadJson(
+      geojson,
+      `tracks-${new Date().toISOString().slice(0, 10)}.geojson`,
+      "application/geo+json",
+    );
+    els.syncStatus.textContent = `Exported ${geojson.features.length} GeoJSON feature(s)`;
+  }
+
+  async function exportBackupJson() {
+    const tracks = await getAllTracks();
+    if (tracks.length === 0) {
+      els.syncStatus.textContent = "No tracks to backup";
+      return;
+    }
+
+    downloadJson(
+      { exportedAt: new Date().toISOString(), format: "trajectory-collector-backup", tracks },
+      `tracks-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      "application/json",
+    );
+    els.syncStatus.textContent = `Backed up ${tracks.length} track(s)`;
+  }
+
+  function downloadJson(data, filename, type) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `tracks-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
-    els.syncStatus.textContent = `Exported ${tracks.length} track(s)`;
+  }
+
+  function tracksToGeojson(tracks) {
+    const features = tracks
+      .filter((track) => Array.isArray(track.points) && track.points.length > 0)
+      .map((track) => {
+        const coordinates = track.points.map((point) => [point.longitude, point.latitude]);
+        const geometry =
+          coordinates.length === 1
+            ? { type: "Point", coordinates: coordinates[0] }
+            : { type: "LineString", coordinates };
+
+        return {
+          type: "Feature",
+          geometry,
+          properties: {
+            id: track.id,
+            status: track.status,
+            startedAt: track.startedAt,
+            stoppedAt: track.stoppedAt,
+            syncedAt: track.syncedAt,
+            pointCount: track.points.length,
+            distanceMeters: Math.round(calculateDistance(track.points)),
+            firstTimestamp: track.points[0]?.timestamp || null,
+            lastTimestamp: track.points[track.points.length - 1]?.timestamp || null,
+          },
+        };
+      });
+
+    return {
+      type: "FeatureCollection",
+      name: "trajectory-collector-tracks",
+      generatedAt: new Date().toISOString(),
+      features,
+    };
   }
 
   function updateNetworkStatus() {

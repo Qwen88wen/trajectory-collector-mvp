@@ -9,6 +9,7 @@
 - Stop 后结束当前路线并标记为待上传。
 - 使用离线画布显示刚刚走过的轨迹线。
 - 有网络时 POST 上传；离线或上传失败时保存在 IndexedDB，之后打开页面、恢复网络或点击 Sync 会重试。
+- 导出 GeoJSON，可直接导入 geojson.io 查看轨迹。
 
 ## 本地运行
 
@@ -117,6 +118,22 @@ Vercel 函数会把字段转换为 Supabase 表字段：
 - `distanceMeters` -> `distance_meters`
 - `points` -> `points`
 - `client` -> `client`
+
+## 导入到 geojson.io
+
+点击页面里的 `Export GeoJSON`，下载的文件名是：
+
+```text
+tracks-YYYY-MM-DD.geojson
+```
+
+这个文件是标准 GeoJSON `FeatureCollection`：
+
+- 多个 GPS 点的轨迹导出为 `LineString`
+- 只有一个 GPS 点的轨迹导出为 `Point`
+- 坐标顺序是 GeoJSON 标准的 `[longitude, latitude]`
+
+`Backup JSON` 是本 App 的原始备份格式，不是 GeoJSON，不能直接用 geojson.io 的 GeoJSON 导入。
 
 ## 第一版限制
 

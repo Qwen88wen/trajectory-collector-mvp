@@ -79,7 +79,10 @@
 
         <div class="route-list-header">
           <span>Saved tracks</span>
-          <button id="exportButton" class="secondary-button" type="button">Export JSON</button>
+          <div class="export-actions">
+            <button id="exportGeojsonButton" class="secondary-button" type="button">Export GeoJSON</button>
+            <button id="exportJsonButton" class="secondary-button" type="button">Backup JSON</button>
+          </div>
         </div>
         <div id="routeList" class="route-list" aria-live="polite"></div>
       </section>
