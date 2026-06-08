@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101820" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="轨迹采集" />
+    <title>轨迹采集 MVP</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Trajectory Collector</p>
+          <h1>轨迹采集 MVP</h1>
+        </div>
+        <div class="network-pill" id="networkStatus" aria-live="polite">Checking</div>
+      </header>
+
+      <section class="recording-panel" aria-labelledby="controlsTitle">
+        <div class="panel-heading">
+          <h2 id="controlsTitle">记录</h2>
+          <p id="recordingStatus" class="status-text">Ready</p>
+        </div>
+
+        <div class="primary-actions" role="group" aria-label="Recording controls">
+          <button id="startButton" class="action-button start" type="button">Start</button>
+          <button id="stopButton" class="action-button stop" type="button" disabled>Stop</button>
+          <button id="syncButton" class="icon-button" type="button" title="Sync pending tracks" aria-label="Sync pending tracks">
+            Sync
+          </button>
+        </div>
+
+        <div class="metrics-grid" aria-live="polite">
+          <div class="metric">
+            <span>Points</span>
+            <strong id="pointCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Accuracy</span>
+            <strong id="accuracyValue">--</strong>
+          </div>
+          <div class="metric">
+            <span>Distance</span>
+            <strong id="distanceValue">0 m</strong>
+          </div>
+          <div class="metric">
+            <span>Duration</span>
+            <strong id="durationValue">00:00</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="map-panel" aria-labelledby="mapTitle">
+        <div class="panel-heading map-heading">
+          <h2 id="mapTitle">当前轨迹</h2>
+          <span id="mapMeta">No route</span>
+        </div>
+        <div class="map-frame">
+          <canvas id="trackCanvas" aria-label="Recorded route map"></canvas>
+        </div>
+      </section>
+
+      <section class="sync-panel" aria-labelledby="syncTitle">
+        <div class="panel-heading">
+          <h2 id="syncTitle">保存 / 上传</h2>
+          <p id="syncStatus" class="status-text">Local database ready</p>
+        </div>
+
+        <label class="endpoint-field">
+          <span>Upload URL</span>
+          <input id="uploadUrl" type="url" inputmode="url" autocomplete="url" placeholder="/api/tracks" />
+        </label>
+
+        <div class="route-list-header">
+          <span>Saved tracks</span>
+          <button id="exportButton" class="secondary-button" type="button">Export JSON</button>
+        </div>
+        <div id="routeList" class="route-list" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

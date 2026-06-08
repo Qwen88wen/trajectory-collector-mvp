@@ -1,0 +1,19 @@
+{
+  "name": "轨迹采集 MVP",
+  "short_name": "轨迹采集",
+  "description": "Offline-first GPS trajectory recording MVP.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#101820",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

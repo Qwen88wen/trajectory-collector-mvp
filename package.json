@@ -1,0 +1,9 @@
+{
+  "name": "trajectory-collector-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "check": "node --check app.js && node --check sw.js && node --check api/tracks.js",
+    "start": "python -m http.server 5173"
+  }
+}
