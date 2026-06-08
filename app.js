@@ -4,7 +4,8 @@
   const DB_NAME = "trajectory-collector-mvp";
   const DB_VERSION = 1;
   const TRACK_STORE = "tracks";
-  const SAMPLE_INTERVAL_MS = 3000;
+  const SAMPLE_INTERVAL_MS = 1000;
+  const MIN_DISTANCE_DELTA_METERS = 3;
   const DEFAULT_UPLOAD_URL = "/api/tracks";
   const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -206,20 +207,24 @@
     }
 
     const positionTime = position.timestamp || Date.now();
-    if (
-      state.currentTrack.points.length > 0 &&
-      positionTime - state.lastSavedAt < SAMPLE_INTERVAL_MS
-    ) {
-      return;
-    }
-
-    state.lastSavedAt = positionTime;
     const point = {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       accuracy: position.coords.accuracy,
       timestamp: new Date(positionTime).toISOString(),
     };
+    const lastPoint = state.currentTrack.points[state.currentTrack.points.length - 1];
+
+    if (lastPoint) {
+      const elapsedMs = positionTime - state.lastSavedAt;
+      const movedMeters = haversine(lastPoint, point);
+
+      if (elapsedMs < SAMPLE_INTERVAL_MS && movedMeters < MIN_DISTANCE_DELTA_METERS) {
+        return;
+      }
+    }
+
+    state.lastSavedAt = positionTime;
 
     const updatedTrack = {
       ...state.currentTrack,
@@ -233,7 +238,7 @@
     updateMetrics(updatedTrack);
     drawTrack(updatedTrack);
     await renderRoutes();
-    els.recordingStatus.textContent = `Recording every ${SAMPLE_INTERVAL_MS / 1000}s`;
+    els.recordingStatus.textContent = `Recording every ${SAMPLE_INTERVAL_MS / 1000}s or ${MIN_DISTANCE_DELTA_METERS}m`;
   }
 
   function handleGeoError(error) {

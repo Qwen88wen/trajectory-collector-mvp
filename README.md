@@ -5,7 +5,7 @@
 ## 功能
 
 - Start 后读取手机 GPS。
-- 默认每 3 秒保存一次 `latitude / longitude / accuracy / timestamp`。
+- 默认每 1 秒保存一次，或移动超过 3 米时保存一次 `latitude / longitude / accuracy / timestamp`。
 - Stop 后结束当前路线并标记为待上传。
 - 使用离线画布显示刚刚走过的轨迹线。
 - 有网络时 POST 上传；离线或上传失败时保存在 IndexedDB，之后打开页面、恢复网络或点击 Sync 会重试。
