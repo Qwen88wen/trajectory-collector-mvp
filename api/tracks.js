@@ -109,16 +109,15 @@ function normalizePoint(point) {
     throw new Error("Each point must be an object");
   }
 
-  const latitude = Number(point.latitude);
-  const longitude = Number(point.longitude);
-  const accuracy = Number(point.accuracy);
+  const lng = Number(point.lng ?? point.longitude);
+  const lat = Number(point.lat ?? point.latitude);
 
-  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
-    throw new Error("Point latitude is invalid");
+  if (!isValidLng(lng)) {
+    throw new Error("Point lng is invalid");
   }
 
-  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-    throw new Error("Point longitude is invalid");
+  if (!isValidLat(lat)) {
+    throw new Error("Point lat is invalid");
   }
 
   if (!isIsoDate(point.timestamp)) {
@@ -126,11 +125,48 @@ function normalizePoint(point) {
   }
 
   return {
-    latitude,
-    longitude,
-    accuracy: Number.isFinite(accuracy) ? accuracy : null,
+    lng,
+    lat,
     timestamp: point.timestamp,
+    accuracy: toNullableNumber(point.accuracy),
+    speed: toNullableNumber(point.speed),
+    heading: toNullableHeading(point.heading),
+    altitude: toNullableNumber(point.altitude),
   };
+}
+
+function isValidLng(value) {
+  return Number.isFinite(value) && value >= -180 && value <= 180;
+}
+
+function isValidLat(value) {
+  return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function toNullableNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function toNullableHeading(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  if (number < 0 || number > 360) {
+    return null;
+  }
+
+  return number;
 }
 
 function sanitizeJsonObject(value) {

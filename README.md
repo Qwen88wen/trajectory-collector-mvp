@@ -5,7 +5,7 @@
 ## 功能
 
 - Start 后读取手机 GPS。
-- 默认每 1 秒保存一次，或移动超过 3 米时保存一次 `latitude / longitude / accuracy / timestamp`。
+- 默认每 1 秒保存一次，或移动超过 3 米时保存一次 `lng / lat / timestamp / accuracy / speed / heading / altitude`。
 - Stop 后结束当前路线并标记为待上传。
 - 使用离线画布显示刚刚走过的轨迹线。
 - 有网络时 POST 上传；离线或上传失败时保存在 IndexedDB，之后打开页面、恢复网络或点击 Sync 会重试。
@@ -95,10 +95,13 @@ Vercel 会自动把这个请求交给 `api/tracks.js`，再写入 Supabase。
   "distanceMeters": 860,
   "points": [
     {
-      "latitude": 31.2304,
-      "longitude": 121.4737,
+      "lng": 121.4737,
+      "lat": 31.2304,
       "accuracy": 12,
-      "timestamp": "2026-06-05T06:00:03.000Z"
+      "timestamp": "2026-06-05T06:00:03.000Z",
+      "speed": 1.4,
+      "heading": 86,
+      "altitude": 8.5
     }
   ],
   "client": {
@@ -131,7 +134,23 @@ tracks-YYYY-MM-DD.geojson
 
 - 多个 GPS 点的轨迹导出为 `LineString`
 - 只有一个 GPS 点的轨迹导出为 `Point`
-- 坐标顺序是 GeoJSON 标准的 `[longitude, latitude]`
+- 坐标顺序是 GeoJSON 标准的 `[lng, lat]`
+
+GeoJSON 坐标导出固定使用：
+
+```js
+const coordinates = points.map(point => [point.lng, point.lat]);
+```
+
+每个新采集的 GPS 点都会保存：
+
+- `lng`: 经度
+- `lat`: 纬度
+- `timestamp`: 采集时间
+- `accuracy`: 水平精度，单位米
+- `speed`: 速度，单位米/秒；设备不提供时为 `null`
+- `heading`: 航向角，0-360 度；设备不提供时为 `null`
+- `altitude`: 海拔，单位米；设备不提供时为 `null`
 
 `Backup JSON` 是本 App 的原始备份格式，不是 GeoJSON，不能直接用 geojson.io 的 GeoJSON 导入。
 

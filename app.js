@@ -201,18 +201,30 @@
     }
   }
 
+  function createPointFromPosition(position, positionTime) {
+    return normalizeTrackPoint({
+      lng: position.coords.longitude,
+      lat: position.coords.latitude,
+      timestamp: new Date(positionTime).toISOString(),
+      accuracy: position.coords.accuracy,
+      speed: position.coords.speed,
+      heading: position.coords.heading,
+      altitude: position.coords.altitude,
+    });
+  }
+
   async function handlePosition(position) {
     if (!state.currentTrack) {
       return;
     }
 
     const positionTime = position.timestamp || Date.now();
-    const point = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracy: position.coords.accuracy,
-      timestamp: new Date(positionTime).toISOString(),
-    };
+    const point = createPointFromPosition(position, positionTime);
+    if (!point) {
+      els.recordingStatus.textContent = "Invalid GPS coordinate";
+      return;
+    }
+
     const lastPoint = state.currentTrack.points[state.currentTrack.points.length - 1];
 
     if (lastPoint) {
@@ -344,13 +356,14 @@
 
   async function uploadTrack(track) {
     const uploadUrl = els.uploadUrl.value.trim() || DEFAULT_UPLOAD_URL;
+    const points = normalizeTrackPoints(track.points);
     const payload = {
       id: track.id,
       startedAt: track.startedAt,
       stoppedAt: track.stoppedAt,
-      pointCount: track.points.length,
-      distanceMeters: Math.round(calculateDistance(track.points)),
-      points: track.points,
+      pointCount: points.length,
+      distanceMeters: Math.round(calculateDistance(points)),
+      points,
       client: {
         userAgent: navigator.userAgent,
         uploadedAt: new Date().toISOString(),
@@ -463,7 +476,8 @@
     const features = tracks
       .filter((track) => Array.isArray(track.points) && track.points.length > 0)
       .map((track) => {
-        const coordinates = track.points.map((point) => [point.longitude, point.latitude]);
+        const points = normalizeTrackPoints(track.points);
+        const coordinates = points.map(point => [point.lng, point.lat]);
         const geometry =
           coordinates.length === 1
             ? { type: "Point", coordinates: coordinates[0] }
@@ -478,13 +492,14 @@
             startedAt: track.startedAt,
             stoppedAt: track.stoppedAt,
             syncedAt: track.syncedAt,
-            pointCount: track.points.length,
-            distanceMeters: Math.round(calculateDistance(track.points)),
-            firstTimestamp: track.points[0]?.timestamp || null,
-            lastTimestamp: track.points[track.points.length - 1]?.timestamp || null,
+            pointCount: points.length,
+            distanceMeters: Math.round(calculateDistance(points)),
+            firstTimestamp: points[0]?.timestamp || null,
+            lastTimestamp: points[points.length - 1]?.timestamp || null,
           },
         };
-      });
+      })
+      .filter((feature) => feature.geometry.coordinates.length > 0);
 
     return {
       type: "FeatureCollection",
@@ -513,7 +528,10 @@
 
     const lastPoint = track.points[track.points.length - 1];
     els.pointCount.textContent = String(track.points.length);
-    els.accuracyValue.textContent = lastPoint ? `±${Math.round(lastPoint.accuracy)} m` : "--";
+    els.accuracyValue.textContent =
+      lastPoint && Number.isFinite(getPointAccuracy(lastPoint))
+        ? `±${Math.round(getPointAccuracy(lastPoint))} m`
+        : "--";
     els.distanceValue.textContent = formatDistance(calculateDistance(track.points));
     els.durationValue.textContent = formatDuration(track);
     els.mapMeta.textContent = `${track.status} · ${formatTrackTitle(track)}`;
@@ -537,7 +555,12 @@
       return;
     }
 
-    const points = track.points;
+    const points = normalizeTrackPoints(track.points);
+    if (points.length === 0) {
+      drawCanvasLabel(ctx, width, height, "Waiting for GPS");
+      return;
+    }
+
     const projector = createProjector(points, width, height);
     const screenPoints = points.map(projector.toScreen);
 
@@ -556,8 +579,9 @@
     drawPoint(ctx, start.x, start.y, "#ffffff", "#00d2b8", 5);
 
     const lastPoint = points[points.length - 1];
-    if (lastPoint.accuracy) {
-      const radius = clamp(lastPoint.accuracy * projector.scale, 9, 92);
+    const lastAccuracy = getPointAccuracy(lastPoint);
+    if (Number.isFinite(lastAccuracy)) {
+      const radius = clamp(lastAccuracy * projector.scale, 9, 92);
       ctx.beginPath();
       ctx.arc(last.x, last.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(0, 210, 184, 0.13)";
@@ -627,13 +651,15 @@
   }
 
   function createProjector(points, width, height) {
+    const validPoints = normalizeTrackPoints(points);
     const meanLat =
-      points.reduce((total, point) => total + point.latitude, 0) / Math.max(1, points.length);
+      validPoints.reduce((total, point) => total + point.lat, 0) /
+      Math.max(1, validPoints.length);
     const metersPerLon = 111320 * Math.cos((meanLat * Math.PI) / 180);
     const metersPerLat = 110540;
-    const projected = points.map((point) => ({
-      x: point.longitude * metersPerLon,
-      y: point.latitude * metersPerLat,
+    const projected = validPoints.map((point) => ({
+      x: point.lng * metersPerLon,
+      y: point.lat * metersPerLat,
     }));
 
     let minX = Math.min(...projected.map((point) => point.x));
@@ -665,8 +691,8 @@
     return {
       scale,
       toScreen(point) {
-        const x = point.longitude * metersPerLon;
-        const y = point.latitude * metersPerLat;
+        const x = point.lng * metersPerLon;
+        const y = point.lat * metersPerLat;
         return {
           x: left + (x - minX) * scale,
           y: top + mapHeight - (y - minY) * scale,
@@ -676,23 +702,28 @@
   }
 
   function calculateDistance(points) {
-    if (!points || points.length < 2) {
+    const validPoints = normalizeTrackPoints(points);
+    if (validPoints.length < 2) {
       return 0;
     }
 
     let meters = 0;
-    for (let index = 1; index < points.length; index += 1) {
-      meters += haversine(points[index - 1], points[index]);
+    for (let index = 1; index < validPoints.length; index += 1) {
+      meters += haversine(validPoints[index - 1], validPoints[index]);
     }
     return meters;
   }
 
   function haversine(a, b) {
+    if (!hasValidCoordinates(a) || !hasValidCoordinates(b)) {
+      return 0;
+    }
+
     const earthRadius = 6371000;
-    const dLat = toRadians(b.latitude - a.latitude);
-    const dLon = toRadians(b.longitude - a.longitude);
-    const lat1 = toRadians(a.latitude);
-    const lat2 = toRadians(b.latitude);
+    const dLat = toRadians(b.lat - a.lat);
+    const dLon = toRadians(b.lng - a.lng);
+    const lat1 = toRadians(a.lat);
+    const lat2 = toRadians(b.lat);
     const value =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -701,6 +732,93 @@
 
   function toRadians(value) {
     return (value * Math.PI) / 180;
+  }
+
+  function hasValidCoordinates(point) {
+    return isValidLng(point?.lng) && isValidLat(point?.lat);
+  }
+
+  function getPointAccuracy(point) {
+    return Number(point?.accuracy);
+  }
+
+  function normalizeTrack(track) {
+    return {
+      ...track,
+      points: normalizeTrackPoints(track.points),
+    };
+  }
+
+  function normalizeTrackPoints(points) {
+    if (!Array.isArray(points)) {
+      return [];
+    }
+
+    return points.map(normalizeTrackPoint).filter(Boolean);
+  }
+
+  function normalizeTrackPoint(point) {
+    if (!point || typeof point !== "object") {
+      return null;
+    }
+
+    const lng = Number(point.lng ?? point.longitude);
+    const lat = Number(point.lat ?? point.latitude);
+    const timestamp = normalizeTimestamp(point.timestamp);
+
+    if (!isValidLng(lng) || !isValidLat(lat) || !timestamp) {
+      return null;
+    }
+
+    return {
+      lng,
+      lat,
+      timestamp,
+      accuracy: toNullableNumber(point.accuracy),
+      speed: toNullableNumber(point.speed),
+      heading: toNullableHeading(point.heading),
+      altitude: toNullableNumber(point.altitude),
+    };
+  }
+
+  function isValidLng(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= -180 && number <= 180;
+  }
+
+  function isValidLat(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= -90 && number <= 90;
+  }
+
+  function normalizeTimestamp(value) {
+    if (typeof value !== "string" || Number.isNaN(Date.parse(value))) {
+      return null;
+    }
+
+    return value;
+  }
+
+  function toNullableNumber(value) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function toNullableHeading(value) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0 || number > 360) {
+      return null;
+    }
+
+    return number;
   }
 
   function formatDistance(meters) {
@@ -769,9 +887,10 @@
 
   function putTrack(track) {
     return new Promise((resolve, reject) => {
+      const normalizedTrack = normalizeTrack(track);
       const transaction = state.db.transaction(TRACK_STORE, "readwrite");
-      transaction.objectStore(TRACK_STORE).put(track);
-      transaction.oncomplete = () => resolve(track);
+      transaction.objectStore(TRACK_STORE).put(normalizedTrack);
+      transaction.oncomplete = () => resolve(normalizedTrack);
       transaction.onerror = () => reject(transaction.error);
     });
   }
@@ -780,7 +899,7 @@
     return new Promise((resolve, reject) => {
       const transaction = state.db.transaction(TRACK_STORE, "readonly");
       const request = transaction.objectStore(TRACK_STORE).getAll();
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => resolve((request.result || []).map(normalizeTrack));
       request.onerror = () => reject(request.error);
     });
   }
