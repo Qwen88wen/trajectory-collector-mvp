@@ -1,4 +1,4 @@
-const CACHE_NAME = "trajectory-collector-mvp-v18";
+const CACHE_NAME = "trajectory-collector-mvp-v19";
 const APP_SHELL = [
   "./",
   "./index.html",
