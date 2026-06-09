@@ -6,6 +6,10 @@
   const TRACK_STORE = "tracks";
   const SAMPLE_INTERVAL_MS = 1000;
   const MIN_DISTANCE_DELTA_METERS = 3;
+  const DISPLAY_MAX_ACCURACY_METERS = 30;
+  const DISPLAY_MAX_SPEED_METERS_PER_SECOND = 33.33;
+  const DISPLAY_MAX_JUMP_METERS = 200;
+  const DISPLAY_JUMP_WINDOW_SECONDS = 10;
   const DEFAULT_UPLOAD_URL = "/api/tracks";
   const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -535,6 +539,8 @@
 
     const points = normalizeTrackPoints(track.points);
     const lastPoint = points[points.length - 1];
+    const displayPoints = getDisplayTrackPoints(points);
+    const hiddenPointCount = Math.max(0, points.length - displayPoints.length);
     const speed = getDisplaySpeed(lastPoint);
     const heading = getDisplayHeading(lastPoint);
 
@@ -549,7 +555,10 @@
     els.currentDirectionValue.textContent = formatHeading(heading.value);
     els.speedSourceValue.textContent = formatValueSource(speed.source);
     els.headingSourceValue.textContent = formatValueSource(heading.source);
-    els.mapMeta.textContent = `${track.status} · ${formatTrackTitle(track)}`;
+    els.mapMeta.textContent =
+      hiddenPointCount > 0
+        ? `${track.status} · ${formatTrackTitle(track)} · ${hiddenPointCount} filtered`
+        : `${track.status} · ${formatTrackTitle(track)}`;
   }
 
   function drawTrack(track) {
@@ -570,9 +579,9 @@
       return;
     }
 
-    const points = normalizeTrackPoints(track.points);
+    const points = getDisplayTrackPoints(track.points);
     if (points.length === 0) {
-      drawCanvasLabel(ctx, width, height, "Waiting for GPS");
+      drawCanvasLabel(ctx, width, height, "No reliable GPS points");
       return;
     }
 
@@ -774,6 +783,52 @@
 
   function getPointAccuracy(point) {
     return Number(point?.accuracy);
+  }
+
+  function getDisplayTrackPoints(points) {
+    const validPoints = normalizeTrackPoints(points);
+    const displayPoints = [];
+
+    for (const point of validPoints) {
+      const previousDisplayPoint = displayPoints[displayPoints.length - 1];
+      if (isReliableDisplayPoint(point, previousDisplayPoint)) {
+        displayPoints.push(point);
+      }
+    }
+
+    return displayPoints;
+  }
+
+  function isReliableDisplayPoint(point, previousDisplayPoint) {
+    const accuracy = getPointAccuracy(point);
+    if (Number.isFinite(accuracy) && accuracy > DISPLAY_MAX_ACCURACY_METERS) {
+      return false;
+    }
+
+    if (!previousDisplayPoint) {
+      return true;
+    }
+
+    const distanceMeters = haversine(previousDisplayPoint, point);
+    const elapsedSeconds = getElapsedSeconds(previousDisplayPoint, point);
+
+    if (elapsedSeconds <= 0) {
+      return true;
+    }
+
+    const speedMetersPerSecond = distanceMeters / elapsedSeconds;
+    if (speedMetersPerSecond > DISPLAY_MAX_SPEED_METERS_PER_SECOND) {
+      return false;
+    }
+
+    return !(
+      elapsedSeconds <= DISPLAY_JUMP_WINDOW_SECONDS &&
+      distanceMeters > DISPLAY_MAX_JUMP_METERS
+    );
+  }
+
+  function getElapsedSeconds(a, b) {
+    return Math.max(0, (new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) / 1000);
   }
 
   function normalizeTrack(track) {

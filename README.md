@@ -8,6 +8,7 @@
 - 默认每 1 秒保存一次，或移动超过 3 米时保存一次 `lng / lat / timestamp / accuracy / speed / heading / altitude`。
 - 保留设备原始 `speed / heading / altitude`，并根据相邻 GPS 点计算 `computedSpeed / computedHeading / distanceFromPrevious / timeFromPrevious`。
 - 记录中会显示当前速度、当前方向，以及速度/方向使用的是设备值还是计算值。
+- 地图画线会过滤明显不可靠的显示点，例如 `accuracy > 30m`、短时间大跳点或超过 120 km/h 的异常速度；原始 GPS 点仍会完整保存和上传。
 - Stop 后结束当前路线并标记为待上传。
 - 使用离线画布显示刚刚走过的轨迹线。
 - 有网络时 POST 上传；离线或上传失败时保存在 IndexedDB，之后打开页面、恢复网络或点击 Sync 会重试。
