@@ -219,17 +219,16 @@
     }
 
     const positionTime = position.timestamp || Date.now();
-    const point = createPointFromPosition(position, positionTime);
+    const lastPoint = state.currentTrack.points[state.currentTrack.points.length - 1];
+    const point = addComputedPointValues(createPointFromPosition(position, positionTime), lastPoint);
     if (!point) {
       els.recordingStatus.textContent = "Invalid GPS coordinate";
       return;
     }
 
-    const lastPoint = state.currentTrack.points[state.currentTrack.points.length - 1];
-
     if (lastPoint) {
       const elapsedMs = positionTime - state.lastSavedAt;
-      const movedMeters = haversine(lastPoint, point);
+      const movedMeters = point.distanceFromPrevious || 0;
 
       if (elapsedMs < SAMPLE_INTERVAL_MS && movedMeters < MIN_DISTANCE_DELTA_METERS) {
         return;
@@ -730,8 +729,27 @@
     return earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
   }
 
+  function calculateBearing(a, b) {
+    if (!hasValidCoordinates(a) || !hasValidCoordinates(b)) {
+      return null;
+    }
+
+    const lat1 = toRadians(a.lat);
+    const lat2 = toRadians(b.lat);
+    const dLon = toRadians(b.lng - a.lng);
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x =
+      Math.cos(lat1) * Math.sin(lat2) -
+      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (toDegrees(Math.atan2(y, x)) + 360) % 360;
+  }
+
   function toRadians(value) {
     return (value * Math.PI) / 180;
+  }
+
+  function toDegrees(value) {
+    return (value * 180) / Math.PI;
   }
 
   function hasValidCoordinates(point) {
@@ -770,14 +788,64 @@
       return null;
     }
 
+    const speed = toNullableNumber(point.speed);
+    const heading = toNullableHeading(point.heading);
+    const computedSpeed = toNullableNumber(point.computedSpeed);
+    const computedHeading = toNullableHeading(point.computedHeading);
+
     return {
       lng,
       lat,
       timestamp,
       accuracy: toNullableNumber(point.accuracy),
-      speed: toNullableNumber(point.speed),
-      heading: toNullableHeading(point.heading),
+      speed,
+      heading,
       altitude: toNullableNumber(point.altitude),
+      computedSpeed,
+      computedHeading,
+      distanceFromPrevious: toNullableNumber(point.distanceFromPrevious),
+      timeFromPrevious: toNullableNumber(point.timeFromPrevious),
+      speedSource: normalizeValueSource(point.speedSource, speed, computedSpeed),
+      headingSource: normalizeValueSource(point.headingSource, heading, computedHeading),
+    };
+  }
+
+  function addComputedPointValues(point, previousPoint) {
+    if (!point) {
+      return null;
+    }
+
+    const previous = normalizeTrackPoint(previousPoint);
+    if (!previous) {
+      return {
+        ...point,
+        computedSpeed: null,
+        computedHeading: null,
+        distanceFromPrevious: 0,
+        timeFromPrevious: 0,
+        speedSource: normalizeValueSource(point.speedSource, point.speed, null),
+        headingSource: normalizeValueSource(point.headingSource, point.heading, null),
+      };
+    }
+
+    const distanceFromPrevious = haversine(previous, point);
+    const timeFromPrevious = Math.max(
+      0,
+      (new Date(point.timestamp).getTime() - new Date(previous.timestamp).getTime()) / 1000,
+    );
+    const computedSpeed =
+      timeFromPrevious > 0 ? distanceFromPrevious / timeFromPrevious : null;
+    const computedHeading =
+      timeFromPrevious > 0 && distanceFromPrevious > 0 ? calculateBearing(previous, point) : null;
+
+    return {
+      ...point,
+      computedSpeed,
+      computedHeading,
+      distanceFromPrevious,
+      timeFromPrevious,
+      speedSource: normalizeValueSource(point.speedSource, point.speed, computedSpeed),
+      headingSource: normalizeValueSource(point.headingSource, point.heading, computedHeading),
     };
   }
 
@@ -806,6 +874,30 @@
 
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
+  }
+
+  function normalizeValueSource(value, deviceValue, computedValue) {
+    if (value === "device" && deviceValue !== null) {
+      return "device";
+    }
+
+    if (value === "computed" && computedValue !== null) {
+      return "computed";
+    }
+
+    if (value === "none") {
+      return "none";
+    }
+
+    if (deviceValue !== null) {
+      return "device";
+    }
+
+    if (computedValue !== null) {
+      return "computed";
+    }
+
+    return "none";
   }
 
   function toNullableHeading(value) {

@@ -124,14 +124,25 @@ function normalizePoint(point) {
     throw new Error("Point timestamp must be an ISO date string");
   }
 
+  const speed = toNullableNumber(point.speed);
+  const heading = toNullableHeading(point.heading);
+  const computedSpeed = toNullableNumber(point.computedSpeed);
+  const computedHeading = toNullableHeading(point.computedHeading);
+
   return {
     lng,
     lat,
     timestamp: point.timestamp,
     accuracy: toNullableNumber(point.accuracy),
-    speed: toNullableNumber(point.speed),
-    heading: toNullableHeading(point.heading),
+    speed,
+    heading,
     altitude: toNullableNumber(point.altitude),
+    computedSpeed,
+    computedHeading,
+    distanceFromPrevious: toNullableNumber(point.distanceFromPrevious),
+    timeFromPrevious: toNullableNumber(point.timeFromPrevious),
+    speedSource: normalizeValueSource(point.speedSource, speed, computedSpeed),
+    headingSource: normalizeValueSource(point.headingSource, heading, computedHeading),
   };
 }
 
@@ -150,6 +161,30 @@ function toNullableNumber(value) {
 
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function normalizeValueSource(value, deviceValue, computedValue) {
+  if (value === "device" && deviceValue !== null) {
+    return "device";
+  }
+
+  if (value === "computed" && computedValue !== null) {
+    return "computed";
+  }
+
+  if (value === "none") {
+    return "none";
+  }
+
+  if (deviceValue !== null) {
+    return "device";
+  }
+
+  if (computedValue !== null) {
+    return "computed";
+  }
+
+  return "none";
 }
 
 function toNullableHeading(value) {
