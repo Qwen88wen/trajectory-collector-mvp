@@ -10,6 +10,7 @@
   const DISPLAY_MAX_SPEED_METERS_PER_SECOND = 33.33;
   const DISPLAY_MAX_JUMP_METERS = 200;
   const DISPLAY_JUMP_WINDOW_SECONDS = 10;
+  const MOVING_SPEED_THRESHOLD_METERS_PER_SECOND = 1 / 3.6;
   const DEFAULT_UPLOAD_URL = "/api/tracks";
   const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -33,6 +34,9 @@
     accuracyValue: document.querySelector("#accuracyValue"),
     distanceValue: document.querySelector("#distanceValue"),
     durationValue: document.querySelector("#durationValue"),
+    movingTimeValue: document.querySelector("#movingTimeValue"),
+    stoppedTimeValue: document.querySelector("#stoppedTimeValue"),
+    averageSpeedValue: document.querySelector("#averageSpeedValue"),
     currentSpeedValue: document.querySelector("#currentSpeedValue"),
     currentDirectionValue: document.querySelector("#currentDirectionValue"),
     speedSourceValue: document.querySelector("#speedSourceValue"),
@@ -533,6 +537,9 @@
       els.accuracyValue.textContent = "--";
       els.distanceValue.textContent = "0 m";
       els.durationValue.textContent = "00:00";
+      els.movingTimeValue.textContent = "00:00";
+      els.stoppedTimeValue.textContent = "00:00";
+      els.averageSpeedValue.textContent = "--";
       els.currentSpeedValue.textContent = "--";
       els.currentDirectionValue.textContent = "--";
       els.speedSourceValue.textContent = "--";
@@ -545,6 +552,7 @@
     const lastPoint = points[points.length - 1];
     const displayPoints = getDisplayTrackPoints(points);
     const hiddenPointCount = Math.max(0, points.length - displayPoints.length);
+    const movementStats = calculateMovementStats(track, displayPoints);
     const speed = getDisplaySpeed(lastPoint);
     const heading = getDisplayHeading(lastPoint);
 
@@ -557,6 +565,9 @@
         : "--";
     els.distanceValue.textContent = formatDistance(calculateDistance(points));
     els.durationValue.textContent = formatDuration(track);
+    els.movingTimeValue.textContent = formatDurationSeconds(movementStats.movingSeconds);
+    els.stoppedTimeValue.textContent = formatDurationSeconds(movementStats.stoppedSeconds);
+    els.averageSpeedValue.textContent = formatSpeed(movementStats.averageSpeed);
     els.currentSpeedValue.textContent = formatSpeed(speed.value);
     els.currentDirectionValue.textContent = formatHeading(heading.value);
     els.speedSourceValue.textContent = formatValueSource(speed.source);
@@ -742,6 +753,34 @@
       meters += haversine(validPoints[index - 1], validPoints[index]);
     }
     return meters;
+  }
+
+  function calculateMovementStats(track, points) {
+    const displayPoints = normalizeTrackPoints(points);
+    const totalSeconds = getTrackDurationSeconds(track);
+    const distanceMeters = calculateDistance(displayPoints);
+    let movingSeconds = 0;
+
+    for (let index = 1; index < displayPoints.length; index += 1) {
+      const previousPoint = displayPoints[index - 1];
+      const point = displayPoints[index];
+      const elapsedSeconds = getElapsedSeconds(previousPoint, point);
+
+      if (elapsedSeconds <= 0) {
+        continue;
+      }
+
+      const segmentSpeed = haversine(previousPoint, point) / elapsedSeconds;
+      if (segmentSpeed > MOVING_SPEED_THRESHOLD_METERS_PER_SECOND) {
+        movingSeconds += elapsedSeconds;
+      }
+    }
+
+    return {
+      movingSeconds,
+      stoppedSeconds: Math.max(0, totalSeconds - movingSeconds),
+      averageSpeed: totalSeconds > 0 ? distanceMeters / totalSeconds : null,
+    };
   }
 
   function haversine(a, b) {
@@ -1066,9 +1105,17 @@
       return "00:00";
     }
 
+    return formatDurationSeconds(getTrackDurationSeconds(track));
+  }
+
+  function getTrackDurationSeconds(track) {
     const start = new Date(track.startedAt).getTime();
     const end = track.stoppedAt ? new Date(track.stoppedAt).getTime() : Date.now();
-    const totalSeconds = Math.max(0, Math.floor((end - start) / 1000));
+    return Math.max(0, Math.floor((end - start) / 1000));
+  }
+
+  function formatDurationSeconds(value) {
+    const totalSeconds = Math.max(0, Math.floor(Number(value) || 0));
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
