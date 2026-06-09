@@ -208,6 +208,33 @@ h2 {
   line-height: 1.15;
 }
 
+.metric.quality-good {
+  border-color: rgba(0, 140, 125, 0.34);
+  background: rgba(0, 140, 125, 0.08);
+}
+
+.metric.quality-good strong {
+  color: var(--accent-deep);
+}
+
+.metric.quality-fair {
+  border-color: rgba(165, 106, 0, 0.34);
+  background: rgba(165, 106, 0, 0.08);
+}
+
+.metric.quality-fair strong {
+  color: var(--warning);
+}
+
+.metric.quality-poor {
+  border-color: rgba(200, 63, 73, 0.34);
+  background: rgba(200, 63, 73, 0.08);
+}
+
+.metric.quality-poor strong {
+  color: var(--danger);
+}
+
 .map-panel {
   overflow: hidden;
   margin-bottom: 14px;

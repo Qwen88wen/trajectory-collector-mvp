@@ -32,6 +32,8 @@
     displayPointCount: document.querySelector("#displayPointCount"),
     filteredPointCount: document.querySelector("#filteredPointCount"),
     accuracyValue: document.querySelector("#accuracyValue"),
+    gpsQualityMetric: document.querySelector("#gpsQualityMetric"),
+    gpsQualityValue: document.querySelector("#gpsQualityValue"),
     distanceValue: document.querySelector("#distanceValue"),
     displayDistanceValue: document.querySelector("#displayDistanceValue"),
     durationValue: document.querySelector("#durationValue"),
@@ -538,6 +540,7 @@
       els.displayPointCount.textContent = "0";
       els.filteredPointCount.textContent = "0";
       els.accuracyValue.textContent = "--";
+      setGpsQuality(null);
       els.distanceValue.textContent = "0 m";
       els.displayDistanceValue.textContent = "0 m";
       els.durationValue.textContent = "00:00";
@@ -558,6 +561,7 @@
     const lastPoint = points[points.length - 1];
     const displayPoints = getDisplayTrackPoints(points);
     const hiddenPointCount = Math.max(0, points.length - displayPoints.length);
+    const filteredRatio = points.length > 0 ? hiddenPointCount / points.length : 0;
     const movementStats = calculateMovementStats(track, displayPoints);
     const speed = getDisplaySpeed(lastPoint);
     const heading = getDisplayHeading(lastPoint);
@@ -569,6 +573,7 @@
       lastPoint && Number.isFinite(getPointAccuracy(lastPoint))
         ? `±${Math.round(getPointAccuracy(lastPoint))} m`
         : "--";
+    setGpsQuality(getGpsQuality(getPointAccuracy(lastPoint), filteredRatio, points.length));
     els.distanceValue.textContent = formatDistance(calculateDistance(points));
     els.displayDistanceValue.textContent = formatDistance(movementStats.distanceMeters);
     els.durationValue.textContent = formatDuration(track);
@@ -961,6 +966,34 @@
 
   function getPointAccuracy(point) {
     return Number(point?.accuracy);
+  }
+
+  function getGpsQuality(accuracy, filteredRatio, rawPointCount) {
+    if (rawPointCount === 0 || !Number.isFinite(accuracy)) {
+      return { label: "--", level: "unknown" };
+    }
+
+    if (accuracy <= 10 && filteredRatio <= 0.1) {
+      return { label: "Good", level: "good" };
+    }
+
+    if (accuracy <= 30 && filteredRatio <= 0.3) {
+      return { label: "Fair", level: "fair" };
+    }
+
+    return { label: "Poor", level: "poor" };
+  }
+
+  function setGpsQuality(quality) {
+    const nextQuality = quality || { label: "--", level: "unknown" };
+    els.gpsQualityValue.textContent = nextQuality.label;
+    els.gpsQualityMetric.classList.remove(
+      "quality-good",
+      "quality-fair",
+      "quality-poor",
+      "quality-unknown",
+    );
+    els.gpsQualityMetric.classList.add(`quality-${nextQuality.level}`);
   }
 
   function getDisplayTrackPoints(points) {
