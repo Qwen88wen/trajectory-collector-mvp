@@ -15,6 +15,11 @@
   const MAX_POSITION_AGE_MS = 10000;
   const STATIONARY_DRIFT_DISTANCE_METERS = 5;
   const STATIONARY_DRIFT_MAX_ACCURACY_METERS = 25;
+  const LOW_SPEED_DRIFT_MAX_METERS_PER_SECOND = 2 / 3.6;
+  const LOW_SPEED_DRIFT_MIN_RADIUS_METERS = 18;
+  const LOW_SPEED_DRIFT_ACCURACY_MULTIPLIER = 3;
+  const LOW_SPEED_DRIFT_MAX_RADIUS_METERS = 35;
+  const LOW_SPEED_CONFIRMATION_BEARING_DEGREES = 70;
   const DEFAULT_UPLOAD_URL = "/api/tracks";
   const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -62,6 +67,7 @@
     watchId: null,
     sampleTimer: null,
     lastSavedAt: 0,
+    pendingMovementPoint: null,
     durationTimer: null,
     syncing: false,
   };
@@ -153,6 +159,7 @@
     state.currentTrack = track;
     state.selectedTrack = track;
     state.lastSavedAt = Date.parse(now);
+    state.pendingMovementPoint = null;
     setRecordingMode(true);
     els.recordingStatus.textContent = `${formatTrackStatus(track.status)} - acquiring GPS`;
     els.syncStatus.textContent = "Recording is saved locally";
@@ -191,6 +198,7 @@
     await putTrack(stoppedTrack);
     state.currentTrack = null;
     state.selectedTrack = stoppedTrack;
+    state.pendingMovementPoint = null;
     setRecordingMode(false);
     stopDurationTimer();
     updateMetrics(stoppedTrack);
@@ -263,12 +271,21 @@
         return;
       }
 
+      if (needsLowSpeedMovementConfirmation(point, lastPoint)) {
+        if (!confirmsLowSpeedMovement(point, lastPoint)) {
+          state.pendingMovementPoint = point;
+          els.recordingStatus.textContent = `${formatTrackStatus(state.currentTrack.status)} - confirming low-speed movement`;
+          return;
+        }
+      }
+
       if (elapsedMs < SAMPLE_INTERVAL_MS && movedMeters < MIN_DISTANCE_DELTA_METERS) {
         return;
       }
     }
 
     state.lastSavedAt = positionTime;
+    state.pendingMovementPoint = null;
 
     const updatedTrack = {
       ...state.currentTrack,
@@ -998,21 +1015,21 @@
 
   function isStationaryDriftPoint(point, previousPoint) {
     const movedMeters = point.distanceFromPrevious || haversine(previousPoint, point);
-    const speed = getDisplaySpeed(point).value;
     const uncertaintyMeters = getPointUncertaintyMeters(point, previousPoint);
 
     if (movedMeters === 0) {
       return true;
     }
 
-    if (point.speed !== null && point.speed > MOVING_SPEED_THRESHOLD_METERS_PER_SECOND) {
-      return false;
-    }
-
     if (movedMeters <= uncertaintyMeters) {
       return true;
     }
 
+    if (hasLowSpeedSignal(point) && movedMeters <= getLowSpeedDriftRadiusMeters(point, previousPoint)) {
+      return true;
+    }
+
+    const speed = getDisplaySpeed(point).value;
     return speed !== null && speed <= MOVING_SPEED_THRESHOLD_METERS_PER_SECOND;
   }
 
@@ -1023,10 +1040,73 @@
     }
 
     return clamp(
-      Math.max(STATIONARY_DRIFT_DISTANCE_METERS, Math.min(...accuracies)),
+      Math.max(STATIONARY_DRIFT_DISTANCE_METERS, Math.max(...accuracies)),
       STATIONARY_DRIFT_DISTANCE_METERS,
       STATIONARY_DRIFT_MAX_ACCURACY_METERS,
     );
+  }
+
+  function getLowSpeedDriftRadiusMeters(point, previousPoint) {
+    return clamp(
+      Math.max(
+        LOW_SPEED_DRIFT_MIN_RADIUS_METERS,
+        getPointUncertaintyMeters(point, previousPoint) * LOW_SPEED_DRIFT_ACCURACY_MULTIPLIER,
+      ),
+      LOW_SPEED_DRIFT_MIN_RADIUS_METERS,
+      LOW_SPEED_DRIFT_MAX_RADIUS_METERS,
+    );
+  }
+
+  function hasLowSpeedSignal(point) {
+    const speeds = [point?.speed, point?.computedSpeed].filter(Number.isFinite);
+    if (speeds.length === 0) {
+      return true;
+    }
+
+    return speeds.some((speed) => speed <= LOW_SPEED_DRIFT_MAX_METERS_PER_SECOND);
+  }
+
+  function needsLowSpeedMovementConfirmation(point, previousPoint) {
+    if (!hasLowSpeedSignal(point)) {
+      return false;
+    }
+
+    const movedMeters = point.distanceFromPrevious || haversine(previousPoint, point);
+    return movedMeters <= LOW_SPEED_DRIFT_MAX_RADIUS_METERS;
+  }
+
+  function confirmsLowSpeedMovement(point, previousPoint) {
+    const pendingPoint = state.pendingMovementPoint;
+    if (!pendingPoint) {
+      return false;
+    }
+
+    const minimumDistance = getLowSpeedDriftRadiusMeters(point, previousPoint);
+    const pendingDistance = haversine(previousPoint, pendingPoint);
+    const currentDistance = haversine(previousPoint, point);
+    const candidateStepDistance = haversine(pendingPoint, point);
+
+    if (
+      pendingDistance < minimumDistance ||
+      currentDistance < minimumDistance ||
+      currentDistance < pendingDistance ||
+      candidateStepDistance < MIN_DISTANCE_DELTA_METERS
+    ) {
+      return false;
+    }
+
+    const pendingBearing = calculateBearing(previousPoint, pendingPoint);
+    const currentBearing = calculateBearing(previousPoint, point);
+    return getHeadingDeltaDegrees(pendingBearing, currentBearing) <= LOW_SPEED_CONFIRMATION_BEARING_DEGREES;
+  }
+
+  function getHeadingDeltaDegrees(a, b) {
+    if (a === null || b === null || !Number.isFinite(a) || !Number.isFinite(b)) {
+      return 0;
+    }
+
+    const delta = Math.abs(((a - b + 540) % 360) - 180);
+    return delta;
   }
 
   function getGpsQuality(accuracy, filteredRatio, rawPointCount) {
@@ -1086,6 +1166,13 @@
 
     if (elapsedSeconds <= 0) {
       return true;
+    }
+
+    if (
+      hasLowSpeedSignal(point) &&
+      distanceMeters <= getLowSpeedDriftRadiusMeters(point, previousDisplayPoint)
+    ) {
+      return false;
     }
 
     const speedMetersPerSecond = distanceMeters / elapsedSeconds;
