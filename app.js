@@ -16,12 +16,15 @@
   const STATIONARY_DRIFT_DISTANCE_METERS = 5;
   const STATIONARY_DRIFT_MAX_ACCURACY_METERS = 25;
   const LOW_SPEED_DRIFT_MAX_METERS_PER_SECOND = 2 / 3.6;
+  const WALKING_START_SPEED_METERS_PER_SECOND = 2 / 3.6;
   const LOW_SPEED_CONFIRMATION_MIN_DISTANCE_METERS = 6;
   const LOW_SPEED_CONFIRMATION_MAX_DISTANCE_METERS = 12;
   const LOW_SPEED_CONFIRMATION_MAX_RADIUS_METERS = 35;
   const LOW_SPEED_CONFIRMATION_MIN_STEP_METERS = 2;
   const LOW_SPEED_CONFIRMATION_PROGRESS_METERS = 2;
   const LOW_SPEED_CONFIRMATION_BEARING_DEGREES = 70;
+  const LOW_SPEED_CONFIRMATION_MAX_AGE_MS = 20000;
+  const LOW_SPEED_CONFIRMATION_BACKTRACK_METERS = 3;
   const DEFAULT_UPLOAD_URL = "/api/tracks";
   const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -276,7 +279,9 @@
 
       if (needsLowSpeedMovementConfirmation(point, lastPoint)) {
         if (!confirmsLowSpeedMovement(point, lastPoint)) {
-          state.pendingMovementPoint = point;
+          if (shouldReplacePendingMovementPoint(point, lastPoint)) {
+            state.pendingMovementPoint = point;
+          }
           els.recordingStatus.textContent = `${formatTrackStatus(state.currentTrack.status)} - confirming low-speed movement`;
           return;
         }
@@ -1024,6 +1029,10 @@
       return true;
     }
 
+    if (hasWalkingSpeedSignal(point) && movedMeters >= MIN_DISTANCE_DELTA_METERS) {
+      return false;
+    }
+
     if (movedMeters <= uncertaintyMeters) {
       return true;
     }
@@ -1062,7 +1071,16 @@
     return speeds.some((speed) => speed <= LOW_SPEED_DRIFT_MAX_METERS_PER_SECOND);
   }
 
+  function hasWalkingSpeedSignal(point) {
+    const speeds = [point?.speed, point?.computedSpeed].filter(Number.isFinite);
+    return speeds.some((speed) => speed >= WALKING_START_SPEED_METERS_PER_SECOND);
+  }
+
   function needsLowSpeedMovementConfirmation(point, previousPoint) {
+    if (hasWalkingSpeedSignal(point)) {
+      return false;
+    }
+
     if (!hasLowSpeedSignal(point)) {
       return false;
     }
@@ -1093,6 +1111,23 @@
     const pendingBearing = calculateBearing(previousPoint, pendingPoint);
     const currentBearing = calculateBearing(previousPoint, point);
     return getHeadingDeltaDegrees(pendingBearing, currentBearing) <= LOW_SPEED_CONFIRMATION_BEARING_DEGREES;
+  }
+
+  function shouldReplacePendingMovementPoint(point, previousPoint) {
+    const pendingPoint = state.pendingMovementPoint;
+    if (!pendingPoint) {
+      return true;
+    }
+
+    const pendingTime = new Date(pendingPoint.timestamp).getTime();
+    const currentTime = new Date(point.timestamp).getTime();
+    if (currentTime - pendingTime > LOW_SPEED_CONFIRMATION_MAX_AGE_MS) {
+      return true;
+    }
+
+    const pendingDistance = haversine(previousPoint, pendingPoint);
+    const currentDistance = haversine(previousPoint, point);
+    return currentDistance + LOW_SPEED_CONFIRMATION_BACKTRACK_METERS < pendingDistance;
   }
 
   function getHeadingDeltaDegrees(a, b) {
