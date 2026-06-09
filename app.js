@@ -28,6 +28,8 @@
     exportJsonButton: document.querySelector("#exportJsonButton"),
     uploadUrl: document.querySelector("#uploadUrl"),
     pointCount: document.querySelector("#pointCount"),
+    displayPointCount: document.querySelector("#displayPointCount"),
+    filteredPointCount: document.querySelector("#filteredPointCount"),
     accuracyValue: document.querySelector("#accuracyValue"),
     distanceValue: document.querySelector("#distanceValue"),
     durationValue: document.querySelector("#durationValue"),
@@ -526,6 +528,8 @@
   function updateMetrics(track) {
     if (!track) {
       els.pointCount.textContent = "0";
+      els.displayPointCount.textContent = "0";
+      els.filteredPointCount.textContent = "0";
       els.accuracyValue.textContent = "--";
       els.distanceValue.textContent = "0 m";
       els.durationValue.textContent = "00:00";
@@ -545,6 +549,8 @@
     const heading = getDisplayHeading(lastPoint);
 
     els.pointCount.textContent = String(points.length);
+    els.displayPointCount.textContent = String(displayPoints.length);
+    els.filteredPointCount.textContent = String(hiddenPointCount);
     els.accuracyValue.textContent =
       lastPoint && Number.isFinite(getPointAccuracy(lastPoint))
         ? `±${Math.round(getPointAccuracy(lastPoint))} m`
