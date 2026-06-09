@@ -113,6 +113,7 @@ h2 {
 
 .recording-panel,
 .map-panel,
+.source-panel,
 .sync-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -121,6 +122,7 @@ h2 {
 }
 
 .recording-panel,
+.source-panel,
 .sync-panel {
   padding: 16px;
 }
@@ -240,6 +242,10 @@ h2 {
   margin-bottom: 14px;
 }
 
+.source-panel {
+  margin-bottom: 14px;
+}
+
 .map-heading {
   padding: 16px 16px 0;
 }
@@ -256,6 +262,39 @@ canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.source-grid {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.source-grid > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 10px 12px;
+}
+
+.source-grid dt,
+.source-grid dd {
+  margin: 0;
+}
+
+.source-grid dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.source-grid dd {
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  font-weight: 750;
 }
 
 .endpoint-field {
@@ -442,6 +481,11 @@ canvas {
   .route-list-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .source-grid > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .export-actions {

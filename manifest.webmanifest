@@ -1,6 +1,6 @@
 {
-  "name": "轨迹采集 MVP",
-  "short_name": "轨迹采集",
+  "name": "trajectory recording",
+  "short_name": "route recorder",
   "description": "Offline-first GPS trajectory recording MVP.",
   "start_url": "./",
   "scope": "./",
