@@ -27,6 +27,10 @@
     accuracyValue: document.querySelector("#accuracyValue"),
     distanceValue: document.querySelector("#distanceValue"),
     durationValue: document.querySelector("#durationValue"),
+    currentSpeedValue: document.querySelector("#currentSpeedValue"),
+    currentDirectionValue: document.querySelector("#currentDirectionValue"),
+    speedSourceValue: document.querySelector("#speedSourceValue"),
+    headingSourceValue: document.querySelector("#headingSourceValue"),
     mapMeta: document.querySelector("#mapMeta"),
     routeList: document.querySelector("#routeList"),
     canvas: document.querySelector("#trackCanvas"),
@@ -521,18 +525,30 @@
       els.accuracyValue.textContent = "--";
       els.distanceValue.textContent = "0 m";
       els.durationValue.textContent = "00:00";
+      els.currentSpeedValue.textContent = "--";
+      els.currentDirectionValue.textContent = "--";
+      els.speedSourceValue.textContent = "--";
+      els.headingSourceValue.textContent = "--";
       els.mapMeta.textContent = "No route";
       return;
     }
 
-    const lastPoint = track.points[track.points.length - 1];
-    els.pointCount.textContent = String(track.points.length);
+    const points = normalizeTrackPoints(track.points);
+    const lastPoint = points[points.length - 1];
+    const speed = getDisplaySpeed(lastPoint);
+    const heading = getDisplayHeading(lastPoint);
+
+    els.pointCount.textContent = String(points.length);
     els.accuracyValue.textContent =
       lastPoint && Number.isFinite(getPointAccuracy(lastPoint))
         ? `±${Math.round(getPointAccuracy(lastPoint))} m`
         : "--";
-    els.distanceValue.textContent = formatDistance(calculateDistance(track.points));
+    els.distanceValue.textContent = formatDistance(calculateDistance(points));
     els.durationValue.textContent = formatDuration(track);
+    els.currentSpeedValue.textContent = formatSpeed(speed.value);
+    els.currentDirectionValue.textContent = formatHeading(heading.value);
+    els.speedSourceValue.textContent = formatValueSource(speed.source);
+    els.headingSourceValue.textContent = formatValueSource(heading.source);
     els.mapMeta.textContent = `${track.status} · ${formatTrackTitle(track)}`;
   }
 
@@ -900,6 +916,38 @@
     return "none";
   }
 
+  function getDisplaySpeed(point) {
+    if (!point) {
+      return { value: null, source: "none" };
+    }
+
+    if (point.speed !== null) {
+      return { value: point.speed, source: "device" };
+    }
+
+    if (point.computedSpeed !== null) {
+      return { value: point.computedSpeed, source: "computed" };
+    }
+
+    return { value: null, source: "none" };
+  }
+
+  function getDisplayHeading(point) {
+    if (!point) {
+      return { value: null, source: "none" };
+    }
+
+    if (point.heading !== null) {
+      return { value: point.heading, source: "device" };
+    }
+
+    if (point.computedHeading !== null) {
+      return { value: point.computedHeading, source: "computed" };
+    }
+
+    return { value: null, source: "none" };
+  }
+
   function toNullableHeading(value) {
     if (value === null || value === undefined || value === "") {
       return null;
@@ -911,6 +959,38 @@
     }
 
     return number;
+  }
+
+  function formatSpeed(value) {
+    if (value === null || !Number.isFinite(value)) {
+      return "--";
+    }
+
+    return `${(value * 3.6).toFixed(1)} km/h`;
+  }
+
+  function formatHeading(value) {
+    if (value === null || !Number.isFinite(value)) {
+      return "--";
+    }
+
+    const normalized = ((value % 360) + 360) % 360;
+    return `${toCompassLabel(normalized)} / ${Math.round(normalized)}°`;
+  }
+
+  function toCompassLabel(degrees) {
+    const labels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    const index = Math.round(degrees / 45) % labels.length;
+    return labels[index];
+  }
+
+  function formatValueSource(value) {
+    const labels = {
+      device: "Device",
+      computed: "Computed",
+      none: "--",
+    };
+    return labels[value] || "--";
   }
 
   function formatDistance(meters) {
