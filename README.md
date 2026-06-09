@@ -11,6 +11,7 @@
 - 地图画线会过滤明显不可靠的显示点，例如 `accuracy > 30m`、短时间大跳点或超过 120 km/h 的异常速度；原始 GPS 点仍会完整保存和上传。
 - 记录面板会分开显示 `Raw Points`、`Display Points` 和 `Filtered`，方便判断 GPS 是否有采集到、以及有多少点只是不参与地图画线。
 - 记录面板会显示 `Moving Time`、`Stopped Time` 和 `Avg Speed`；移动时间按可靠显示点相邻段速度超过 1 km/h 计算，平均速度按可靠显示距离 / 总时长计算。
+- 车辆测试统计会显示 `Display Distance`、`Moving Avg` 和 `Max Speed`，全部基于可靠显示点计算，避免漂移点影响速度/距离判断。
 - 地图会标记路线起点 `S`、录制中的当前位置 `C`，以及停止后的终点 `E`。
 - 录制中会在当前位置 `C` 旁画方向箭头；方向优先使用设备 `heading`，没有时使用 `computedHeading`。
 - Stop 后结束当前路线并标记为待上传。

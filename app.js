@@ -33,10 +33,13 @@
     filteredPointCount: document.querySelector("#filteredPointCount"),
     accuracyValue: document.querySelector("#accuracyValue"),
     distanceValue: document.querySelector("#distanceValue"),
+    displayDistanceValue: document.querySelector("#displayDistanceValue"),
     durationValue: document.querySelector("#durationValue"),
     movingTimeValue: document.querySelector("#movingTimeValue"),
     stoppedTimeValue: document.querySelector("#stoppedTimeValue"),
     averageSpeedValue: document.querySelector("#averageSpeedValue"),
+    movingAverageSpeedValue: document.querySelector("#movingAverageSpeedValue"),
+    maxSpeedValue: document.querySelector("#maxSpeedValue"),
     currentSpeedValue: document.querySelector("#currentSpeedValue"),
     currentDirectionValue: document.querySelector("#currentDirectionValue"),
     speedSourceValue: document.querySelector("#speedSourceValue"),
@@ -536,10 +539,13 @@
       els.filteredPointCount.textContent = "0";
       els.accuracyValue.textContent = "--";
       els.distanceValue.textContent = "0 m";
+      els.displayDistanceValue.textContent = "0 m";
       els.durationValue.textContent = "00:00";
       els.movingTimeValue.textContent = "00:00";
       els.stoppedTimeValue.textContent = "00:00";
       els.averageSpeedValue.textContent = "--";
+      els.movingAverageSpeedValue.textContent = "--";
+      els.maxSpeedValue.textContent = "--";
       els.currentSpeedValue.textContent = "--";
       els.currentDirectionValue.textContent = "--";
       els.speedSourceValue.textContent = "--";
@@ -564,10 +570,13 @@
         ? `±${Math.round(getPointAccuracy(lastPoint))} m`
         : "--";
     els.distanceValue.textContent = formatDistance(calculateDistance(points));
+    els.displayDistanceValue.textContent = formatDistance(movementStats.distanceMeters);
     els.durationValue.textContent = formatDuration(track);
     els.movingTimeValue.textContent = formatDurationSeconds(movementStats.movingSeconds);
     els.stoppedTimeValue.textContent = formatDurationSeconds(movementStats.stoppedSeconds);
     els.averageSpeedValue.textContent = formatSpeed(movementStats.averageSpeed);
+    els.movingAverageSpeedValue.textContent = formatSpeed(movementStats.movingAverageSpeed);
+    els.maxSpeedValue.textContent = formatSpeed(movementStats.maxSpeed);
     els.currentSpeedValue.textContent = formatSpeed(speed.value);
     els.currentDirectionValue.textContent = formatHeading(heading.value);
     els.speedSourceValue.textContent = formatValueSource(speed.source);
@@ -890,10 +899,21 @@
     }
 
     return {
+      distanceMeters,
       movingSeconds,
       stoppedSeconds: Math.max(0, totalSeconds - movingSeconds),
       averageSpeed: totalSeconds > 0 ? distanceMeters / totalSeconds : null,
+      movingAverageSpeed: movingSeconds > 0 ? distanceMeters / movingSeconds : null,
+      maxSpeed: calculateMaxSpeed(displayPoints),
     };
+  }
+
+  function calculateMaxSpeed(points) {
+    const speeds = normalizeTrackPoints(points)
+      .map((point) => getDisplaySpeed(point).value)
+      .filter((value) => Number.isFinite(value) && value >= 0);
+
+    return speeds.length > 0 ? Math.max(...speeds) : null;
   }
 
   function haversine(a, b) {
