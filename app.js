@@ -11,6 +11,10 @@
   const DISPLAY_MAX_JUMP_METERS = 200;
   const DISPLAY_JUMP_WINDOW_SECONDS = 10;
   const MOVING_SPEED_THRESHOLD_METERS_PER_SECOND = 1 / 3.6;
+  const STALE_POSITION_TOLERANCE_MS = 1000;
+  const MAX_POSITION_AGE_MS = 10000;
+  const STATIONARY_DRIFT_DISTANCE_METERS = 5;
+  const STATIONARY_DRIFT_MAX_ACCURACY_METERS = 25;
   const DEFAULT_UPLOAD_URL = "/api/tracks";
   const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -148,7 +152,7 @@
     await putTrack(track);
     state.currentTrack = track;
     state.selectedTrack = track;
-    state.lastSavedAt = 0;
+    state.lastSavedAt = Date.parse(now);
     setRecordingMode(true);
     els.recordingStatus.textContent = `${formatTrackStatus(track.status)} - acquiring GPS`;
     els.syncStatus.textContent = "Recording is saved locally";
@@ -238,6 +242,11 @@
     }
 
     const positionTime = position.timestamp || Date.now();
+    if (isStalePosition(positionTime, state.currentTrack)) {
+      els.recordingStatus.textContent = `${formatTrackStatus(state.currentTrack.status)} - ignoring stale GPS fix`;
+      return;
+    }
+
     const lastPoint = state.currentTrack.points[state.currentTrack.points.length - 1];
     const point = addComputedPointValues(createPointFromPosition(position, positionTime), lastPoint);
     if (!point) {
@@ -248,6 +257,11 @@
     if (lastPoint) {
       const elapsedMs = positionTime - state.lastSavedAt;
       const movedMeters = point.distanceFromPrevious || 0;
+
+      if (isStationaryDriftPoint(point, lastPoint)) {
+        els.recordingStatus.textContent = `${formatTrackStatus(state.currentTrack.status)} - stationary GPS drift ignored`;
+        return;
+      }
 
       if (elapsedMs < SAMPLE_INTERVAL_MS && movedMeters < MIN_DISTANCE_DELTA_METERS) {
         return;
@@ -268,7 +282,7 @@
     updateMetrics(updatedTrack);
     drawTrack(updatedTrack);
     await renderRoutes();
-    els.recordingStatus.textContent = `${formatTrackStatus(updatedTrack.status)} - every ${
+    els.recordingStatus.textContent = `${formatTrackStatus(updatedTrack.status)} - saving movement every ${
       SAMPLE_INTERVAL_MS / 1000
     }s or ${MIN_DISTANCE_DELTA_METERS}m`;
   }
@@ -971,6 +985,48 @@
 
   function getPointAccuracy(point) {
     return Number(point?.accuracy);
+  }
+
+  function isStalePosition(positionTime, track) {
+    const startedAt = Date.parse(track.startedAt);
+    const ageMs = Date.now() - positionTime;
+    return (
+      positionTime < startedAt - STALE_POSITION_TOLERANCE_MS ||
+      ageMs > MAX_POSITION_AGE_MS
+    );
+  }
+
+  function isStationaryDriftPoint(point, previousPoint) {
+    const movedMeters = point.distanceFromPrevious || haversine(previousPoint, point);
+    const speed = getDisplaySpeed(point).value;
+    const uncertaintyMeters = getPointUncertaintyMeters(point, previousPoint);
+
+    if (movedMeters === 0) {
+      return true;
+    }
+
+    if (point.speed !== null && point.speed > MOVING_SPEED_THRESHOLD_METERS_PER_SECOND) {
+      return false;
+    }
+
+    if (movedMeters <= uncertaintyMeters) {
+      return true;
+    }
+
+    return speed !== null && speed <= MOVING_SPEED_THRESHOLD_METERS_PER_SECOND;
+  }
+
+  function getPointUncertaintyMeters(point, previousPoint) {
+    const accuracies = [getPointAccuracy(point), getPointAccuracy(previousPoint)].filter(Number.isFinite);
+    if (accuracies.length === 0) {
+      return STATIONARY_DRIFT_DISTANCE_METERS;
+    }
+
+    return clamp(
+      Math.max(STATIONARY_DRIFT_DISTANCE_METERS, Math.min(...accuracies)),
+      STATIONARY_DRIFT_DISTANCE_METERS,
+      STATIONARY_DRIFT_MAX_ACCURACY_METERS,
+    );
   }
 
   function getGpsQuality(accuracy, filteredRatio, rawPointCount) {
