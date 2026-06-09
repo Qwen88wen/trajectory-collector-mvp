@@ -16,6 +16,7 @@
 - 地图会标记路线起点 `S`、录制中的当前位置 `C`，以及停止后的终点 `E`。
 - 录制中会在当前位置 `C` 旁画方向箭头；方向优先使用设备 `heading`，没有时使用 `computedHeading`。
 - 页面会显示定位来源说明：路线记录使用 Browser Geolocation API，GNSS/卫星来源由手机系统选择，可能包含 GPS、BeiDou、Galileo、GLONASS、Wi-Fi、基站和传感器辅助定位。
+- Route status labels are shown in English as `Recording`, `Pending Upload`, `Synced`, and `Failed`.
 - Stop 后结束当前路线并标记为待上传。
 - 使用离线画布显示刚刚走过的轨迹线。
 - 有网络时 POST 上传；离线或上传失败时保存在 IndexedDB，之后打开页面、恢复网络或点击 Sync 会重试。

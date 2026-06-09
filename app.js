@@ -150,7 +150,7 @@
     state.selectedTrack = track;
     state.lastSavedAt = 0;
     setRecordingMode(true);
-    els.recordingStatus.textContent = "Acquiring GPS";
+    els.recordingStatus.textContent = `${formatTrackStatus(track.status)} - acquiring GPS`;
     els.syncStatus.textContent = "Recording is saved locally";
     startDurationTimer();
     updateMetrics(track);
@@ -192,7 +192,7 @@
     updateMetrics(stoppedTrack);
     drawTrack(stoppedTrack);
     await renderRoutes();
-    els.recordingStatus.textContent = `Stopped with ${stoppedTrack.points.length} points`;
+    els.recordingStatus.textContent = `${formatTrackStatus(stoppedTrack.status)} - stopped with ${stoppedTrack.points.length} points`;
 
     if (navigator.onLine) {
       await syncPendingTracks({ silent: false });
@@ -268,7 +268,9 @@
     updateMetrics(updatedTrack);
     drawTrack(updatedTrack);
     await renderRoutes();
-    els.recordingStatus.textContent = `Recording every ${SAMPLE_INTERVAL_MS / 1000}s or ${MIN_DISTANCE_DELTA_METERS}m`;
+    els.recordingStatus.textContent = `${formatTrackStatus(updatedTrack.status)} - every ${
+      SAMPLE_INTERVAL_MS / 1000
+    }s or ${MIN_DISTANCE_DELTA_METERS}m`;
   }
 
   function handleGeoError(error) {
@@ -318,7 +320,7 @@
 
     if (pendingTracks.length === 0) {
       if (!silent) {
-        els.syncStatus.textContent = "No pending tracks";
+        els.syncStatus.textContent = "No Pending Upload tracks";
       }
       return;
     }
@@ -368,7 +370,9 @@
     state.syncing = false;
     els.syncButton.disabled = false;
     els.syncStatus.textContent =
-      failed > 0 ? `Synced ${synced}, ${failed} still pending` : `Synced ${synced} track(s)`;
+      failed > 0
+        ? `Synced ${synced} track(s), ${failed} Failed`
+        : `Synced ${synced} track(s)`;
     await renderRoutes();
   }
 
@@ -434,7 +438,7 @@
 
       title.textContent = formatTrackTitle(track);
       subtitle.textContent = `${track.points.length} points · ${formatDistance(calculateDistance(track.points))}`;
-      badge.textContent = track.status;
+      badge.textContent = formatTrackStatus(track.status);
 
       summary.append(title, subtitle);
       item.append(summary, badge);
@@ -586,10 +590,11 @@
     els.currentDirectionValue.textContent = formatHeading(heading.value);
     els.speedSourceValue.textContent = formatValueSource(speed.source);
     els.headingSourceValue.textContent = formatValueSource(heading.source);
+    const statusLabel = formatTrackStatus(track.status);
     els.mapMeta.textContent =
       hiddenPointCount > 0
-        ? `${track.status} · ${formatTrackTitle(track)} · ${hiddenPointCount} filtered`
-        : `${track.status} · ${formatTrackTitle(track)}`;
+        ? `${statusLabel} · ${formatTrackTitle(track)} · ${hiddenPointCount} filtered`
+        : `${statusLabel} · ${formatTrackTitle(track)}`;
   }
 
   function drawTrack(track) {
@@ -1257,6 +1262,16 @@
       none: "--",
     };
     return labels[value] || "--";
+  }
+
+  function formatTrackStatus(status) {
+    const labels = {
+      recording: "Recording",
+      pending: "Pending Upload",
+      synced: "Synced",
+      failed: "Failed",
+    };
+    return labels[status] || "Unknown";
   }
 
   function formatDistance(meters) {
