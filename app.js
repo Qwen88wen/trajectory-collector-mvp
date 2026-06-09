@@ -615,10 +615,7 @@
     ctx.lineWidth = 4;
     drawPolyline(ctx, screenPoints);
 
-    const start = screenPoints[0];
     const last = screenPoints[screenPoints.length - 1];
-    drawPoint(ctx, start.x, start.y, "#ffffff", "#00d2b8", 5);
-
     const lastPoint = points[points.length - 1];
     const lastAccuracy = getPointAccuracy(lastPoint);
     if (Number.isFinite(lastAccuracy)) {
@@ -632,7 +629,7 @@
       ctx.stroke();
     }
 
-    drawPoint(ctx, last.x, last.y, "#101820", "#ffffff", 7);
+    drawRouteMarkers(ctx, screenPoints, track.status === "recording");
   }
 
   function drawMapBackground(ctx, width, height) {
@@ -689,6 +686,63 @@
     ctx.lineWidth = 3;
     ctx.fill();
     ctx.stroke();
+  }
+
+  function drawRouteMarkers(ctx, points, isRecording) {
+    if (points.length === 0) {
+      return;
+    }
+
+    const start = points[0];
+    const last = points[points.length - 1];
+    drawRouteMarker(ctx, start, "start");
+    drawRouteMarker(ctx, last, isRecording ? "current" : "end");
+  }
+
+  function drawRouteMarker(ctx, point, type) {
+    const config = {
+      start: {
+        fill: "#00d2b8",
+        stroke: "#ffffff",
+        text: "#101820",
+        label: "S",
+      },
+      current: {
+        fill: "#ffffff",
+        stroke: "#00d2b8",
+        text: "#006f64",
+        label: "C",
+      },
+      end: {
+        fill: "#c83f49",
+        stroke: "#ffffff",
+        text: "#ffffff",
+        label: "E",
+      },
+    }[type];
+
+    if (!config) {
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 15, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(16, 24, 32, 0.28)";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = config.fill;
+    ctx.strokeStyle = config.stroke;
+    ctx.lineWidth = 3;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = config.text;
+    ctx.font = "800 10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(config.label, point.x, point.y + 0.5);
   }
 
   function createProjector(points, width, height) {
