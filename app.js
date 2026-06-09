@@ -629,7 +629,7 @@
       ctx.stroke();
     }
 
-    drawRouteMarkers(ctx, screenPoints, track.status === "recording");
+    drawRouteMarkers(ctx, screenPoints, points, track.status === "recording");
   }
 
   function drawMapBackground(ctx, width, height) {
@@ -688,15 +688,20 @@
     ctx.stroke();
   }
 
-  function drawRouteMarkers(ctx, points, isRecording) {
-    if (points.length === 0) {
+  function drawRouteMarkers(ctx, screenPoints, trackPoints, isRecording) {
+    if (screenPoints.length === 0) {
       return;
     }
 
-    const start = points[0];
-    const last = points[points.length - 1];
+    const start = screenPoints[0];
+    const last = screenPoints[screenPoints.length - 1];
+    const lastTrackPoint = trackPoints[trackPoints.length - 1];
     drawRouteMarker(ctx, start, "start");
     drawRouteMarker(ctx, last, isRecording ? "current" : "end");
+
+    if (isRecording) {
+      drawHeadingArrow(ctx, last, getDisplayHeading(lastTrackPoint).value);
+    }
   }
 
   function drawRouteMarker(ctx, point, type) {
@@ -743,6 +748,60 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(config.label, point.x, point.y + 0.5);
+  }
+
+  function drawHeadingArrow(ctx, point, heading) {
+    if (heading === null || !Number.isFinite(heading)) {
+      return;
+    }
+
+    const radians = toRadians(heading);
+    const direction = {
+      x: Math.sin(radians),
+      y: -Math.cos(radians),
+    };
+    const start = {
+      x: point.x + direction.x * 16,
+      y: point.y + direction.y * 16,
+    };
+    const tip = {
+      x: point.x + direction.x * 34,
+      y: point.y + direction.y * 34,
+    };
+    const wingLength = 8;
+    const wingAngle = Math.PI * 0.78;
+    const leftWing = {
+      x: tip.x + Math.sin(radians + wingAngle) * wingLength,
+      y: tip.y - Math.cos(radians + wingAngle) * wingLength,
+    };
+    const rightWing = {
+      x: tip.x + Math.sin(radians - wingAngle) * wingLength,
+      y: tip.y - Math.cos(radians - wingAngle) * wingLength,
+    };
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(16, 24, 32, 0.44)";
+    ctx.lineWidth = 7;
+    drawArrowPath(ctx, start, tip, leftWing, rightWing);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 4;
+    drawArrowPath(ctx, start, tip, leftWing, rightWing);
+    ctx.strokeStyle = "#006f64";
+    ctx.lineWidth = 2;
+    drawArrowPath(ctx, start, tip, leftWing, rightWing);
+    ctx.restore();
+  }
+
+  function drawArrowPath(ctx, start, tip, leftWing, rightWing) {
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.moveTo(leftWing.x, leftWing.y);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.lineTo(rightWing.x, rightWing.y);
+    ctx.stroke();
   }
 
   function createProjector(points, width, height) {
